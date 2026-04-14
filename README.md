@@ -224,20 +224,6 @@ GitHub Actions runs on every push to `main` or `develop`:
 
 ---
 
-## Interview talking points
-
-When asked about this project, you can confidently say:
-
-> "I set up a Kafka broker locally using Docker Compose with ZooKeeper, using two listener configurations so containers communicate on the internal Docker network while the host machine connects on port 29092."
-
-> "My producer polls the GBFS endpoint every 30 seconds, builds a per-station message dict, and sends it to the topic using `acks='all'` for strongest delivery guarantees."
-
-> "My Spark Structured Streaming consumer reads from the Kafka topic using `startingOffsets=latest`, parses the JSON payload against an explicit StructType schema, partitions by processing date, and writes Parquet micro-batches to S3 every 5 minutes."
-
-> "The DuckDB equity gap query joins the batch gold layer (historical trip volume) with the streaming layer (current availability) in a single SQL statement — that's the Lambda architecture pattern in practice."
-
----
-
 ## Planned enhancements (v2)
 
 - [ ] AWS EMR step functions for distributed PySpark execution
