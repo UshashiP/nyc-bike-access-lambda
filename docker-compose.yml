@@ -1,0 +1,181 @@
+version: '3.8'
+
+# ---------------------------------------------------------------------------
+# NYC Citi Bike Equity Pipeline — full local stack
+#
+# Services:
+#   zookeeper  — Kafka coordination
+#   kafka      — message broker
+#   producer   — polls GBFS every 30 s, publishes to Kafka
+#   consumer   — Spark Structured Streaming reads Kafka → S3
+#   airflow    — batch pipeline orchestration (includes scheduler + webserver)
+#
+# Usage:
+#   cp .env.example .env        # fill in AWS credentials and S3 bucket
+#   docker compose up -d
+#   docker compose logs -f producer  # watch station updates streaming in
+#   open http://localhost:8080        # Airflow UI (admin/admin)
+# ---------------------------------------------------------------------------
+
+x-airflow-env: &airflow-env
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+  AWS_REGION: ${AWS_REGION:-us-east-1}
+  S3_BUCKET: ${S3_BUCKET}
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  KAFKA_TOPIC: citibike-station-status
+  STALENESS_THRESHOLD_MINUTES: '10'
+  KAFKA_LAG_THRESHOLD: '10000'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: citibike-postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --------------------------------------------------------------------------
+  # Zookeeper (required by Confluent Kafka 7.x)
+  # --------------------------------------------------------------------------
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: citibike-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo ruok | nc localhost 2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --------------------------------------------------------------------------
+  # Kafka broker
+  # Two listeners:
+  #   PLAINTEXT (port 9092)  — internal container-to-container communication
+  #   PLAINTEXT_HOST (port 29092) — accessible from the host machine
+  # --------------------------------------------------------------------------
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: citibike-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_LOG_RETENTION_HOURS: 168  # 7 days
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # --------------------------------------------------------------------------
+  # GBFS Producer — polls Citi Bike GBFS every 30 seconds
+  # --------------------------------------------------------------------------
+  producer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: citibike-producer
+    command: python src/streaming/producer.py
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TOPIC: citibike-station-status
+      POLL_INTERVAL: '30'
+    restart: on-failure
+
+  # --------------------------------------------------------------------------
+  # Spark Structured Streaming Consumer
+  # NOTE: For production, run this via spark-submit on EMR.
+  # Here we run it as a Docker service for local development/testing.
+  # --------------------------------------------------------------------------
+  consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: citibike-consumer
+    command: python src/streaming/consumer.py
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TOPIC: citibike-station-status
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET}
+    restart: on-failure
+
+  # --------------------------------------------------------------------------
+  # Airflow — batch pipeline orchestration
+  # Runs both the scheduler and webserver in a single container for simplicity.
+  # For production, split these into separate services.
+  # --------------------------------------------------------------------------
+
+  airflow:
+    image: apache/airflow:2.10.5-python3.12
+    container_name: citibike-airflow
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *airflow-env
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./src:/opt/airflow/src
+      - ./config:/opt/airflow/config
+      - airflow_logs:/opt/airflow/logs
+    ports:
+      - "8080:8080"
+    command: >
+      bash -c "
+        airflow db upgrade &&
+        airflow users create
+          --username admin --password admin
+          --firstname Admin --lastname User
+          --role Admin --email admin@example.com &&
+        airflow scheduler &
+        airflow webserver --port 8080
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: on-failure
+
+volumes:
+  airflow_logs:
+  postgres_data:

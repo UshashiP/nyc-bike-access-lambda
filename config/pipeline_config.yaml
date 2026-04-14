@@ -1,0 +1,55 @@
+pipeline:
+  name: nyc-citibike-equity-pipeline
+  version: "1.0.0"
+
+aws:
+  region: us-east-1
+  s3_bucket: "${S3_BUCKET}"  # set via environment variable
+  emr_release: emr-6.15.0
+  emr_instance_type: m5.xlarge
+  emr_instance_count: 3
+
+s3:
+  raw_prefix: raw/citibike
+  bronze_prefix: bronze/citibike
+  silver_prefix: silver/citibike
+  gold_prefix: gold/citibike
+  streaming_prefix: streaming/citibike/station_status
+  checkpoint_prefix: checkpoints/citibike
+  spatial_prefix: reference/spatial
+
+kafka:
+  bootstrap_servers: "${KAFKA_BOOTSTRAP_SERVERS:-localhost:29092}"
+  topic_station_status: citibike-station-status
+  topic_station_info: citibike-station-info
+  poll_interval_seconds: 30
+  consumer_group: citibike-streaming-group
+
+gbfs:
+  station_status_url: "https://gbfs.lyft.com/gbfs/2.3/bkn/en/station_status.json"
+  station_info_url: "https://gbfs.lyft.com/gbfs/2.3/bkn/en/station_information.json"
+
+citibike:
+  # Citi Bike public S3 bucket for historical trip data
+  public_bucket: "s3://tripdata"
+  # Months to ingest (YYYYMM format); override at runtime via Airflow params
+  start_year: 2023
+  end_year: 2024
+
+spatial:
+  # NYC Neighborhood Tabulation Areas (NTAs) GeoJSON from NYC Open Data
+  nta_url: "https://data.cityofnewyork.us/api/geospatial/cpf4-rkhq?method=export&type=GeoJSON"
+  crs: "EPSG:4326"
+
+streaming:
+  micro_batch_interval: "5 minutes"
+  # Alert if no Kafka messages received within this many minutes
+  staleness_threshold_minutes: 10
+
+duckdb:
+  threads: 4
+  memory_limit: "4GB"
+
+logging:
+  level: INFO
+  format: "%(asctime)s [%(levelname)s] %(name)s — %(message)s"
