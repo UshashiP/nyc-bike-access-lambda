@@ -2,9 +2,6 @@
 
 A production-grade **Lambda Architecture** data pipeline combining batch and real-time processing to analyse Citi Bike accessibility across NYC neighbourhoods.
 
-**Resume bullet:**
-> "Engineered a Lambda architecture pipeline combining batch (PySpark, AWS EMR, S3 medallion) and real-time (Kafka, Spark Structured Streaming) layers — processing 35M+ annual Citi Bike trips alongside live GBFS station feeds every 30 seconds, computing neighbourhood accessibility scores with spatial joins, and delivering GeoParquet analytics via DuckDB and Airflow with GitHub Actions CI."
-
 ---
 
 ## Architecture
