@@ -1,6 +1,6 @@
 # NYC Citi Bike Equity Pipeline
 
-A production-grade **Lambda Architecture** data pipeline combining batch and real-time processing to analyse Citi Bike accessibility across NYC neighbourhoods.
+A **Lambda Architecture** data pipeline for analysing Citi Bike station accessibility across NYC neighbourhoods — built with PySpark, Kafka, DuckDB, Airflow, and GeoPandas.
 
 ---
 
@@ -139,18 +139,20 @@ Or run locally (requires PySpark):
 python src/transform.py --yyyymm 202301 --stage all
 ```
 
-### 5 — Query analytics
+### 5 — Run local analytics + charts
 
 ```bash
-# Top 20 stations by total trips
-python src/analytics.py --query top_stations
-
-# Real-time station availability (last 5 minutes)
-python src/analytics.py --query realtime
-
-# Lambda query — high-volume stations that are frequently empty (equity gap)
-python src/analytics.py --query equity_gap
+# Runs DuckDB queries → outputs/*.csv, then generates all charts → outputs/plots/
+./citibike-env/bin/python run_pipeline.py --skip-sync
 ```
+
+### 6 — Launch the interactive dashboard
+
+```bash
+./citibike-env/bin/python -m streamlit run src/dashboard.py
+```
+
+Opens at `http://localhost:8501` with 4 tabs: Overview, Stations, Temporal, and Equity.
 
 ---
 
@@ -198,7 +200,7 @@ The `analytics.py` **equity gap query** identifies stations that are:
 - historically high-volume (from the batch gold layer), AND
 - frequently empty (from the streaming real-time layer)
 
-These are the stations most likely serving high-demand areas with insufficient supply — the core equity finding.
+These are the stations most likely serving high-demand areas with not enough bikes-the core equity finding.
 
 ---
 
