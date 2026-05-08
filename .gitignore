@@ -7,6 +7,7 @@ __pycache__/
 .Python
 *.egg-info/
 dist/
+data/
 build/
 .venv/
 venv/
@@ -20,3 +21,5 @@ htmlcov/
 spark-checkpoint-fallback/
 airflow.db
 airflow/logs/
+.DS_Store
+outputs/.DS_Store

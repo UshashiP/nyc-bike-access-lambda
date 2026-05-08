@@ -58,6 +58,9 @@ nyc-citibike-equity-pipeline/
 │   ├── transform.py        # PySpark: raw → bronze → silver → gold
 │   ├── spatial.py          # GeoPandas: stations → NTA neighbourhoods, accessibility score
 │   ├── analytics.py        # DuckDB queries: batch + streaming combined
+│   ├── analytics_local.py  # DuckDB queries against local gold-layer Parquet
+│   ├── visualize.py        # Matplotlib/Seaborn: 7 publication-quality charts
+│   ├── dashboard.py        # Streamlit interactive dashboard
 │   └── streaming/
 │       ├── producer.py     # Kafka producer — polls GBFS every 30 seconds
 │       └── consumer.py     # Spark Structured Streaming — Kafka → S3
@@ -70,6 +73,9 @@ nyc-citibike-equity-pipeline/
 │   └── test_streaming.py
 ├── config/
 │   └── pipeline_config.yaml
+├── outputs/
+│   └── plots/              # Generated chart PNGs
+├── run_pipeline.py         # Local pipeline entry point (analytics + charts)
 ├── .github/workflows/ci.yml
 ├── docker-compose.yml
 ├── Dockerfile
@@ -218,6 +224,37 @@ GitHub Actions runs on every push to `main` or `develop`:
 1. **Lint** — `ruff` style checks across `src/`, `dags/`, `tests/`
 2. **Unit tests** — pytest with moto (mocked S3) and a live Kafka service container
 3. **Docker build** — verifies the image builds and the producer import is clean
+
+---
+
+## Sample outputs
+
+Run the local pipeline to regenerate all charts:
+
+```bash
+./citibike-env/bin/python run_pipeline.py --skip-sync
+```
+
+### Summary dashboard
+![Summary Dashboard](outputs/plots/summary_dashboard.png)
+
+### Top 20 stations by total trips
+![Top Stations](outputs/plots/top_stations.png)
+
+### Trip volume heatmap — hour of day × day of week
+![Hourly Heatmap](outputs/plots/hourly_heatmap.png)
+
+### Rideable type split
+![Rideable Donut](outputs/plots/rideable_donut.png)
+
+### Member vs casual riders — top 15 stations
+![Member vs Casual](outputs/plots/member_casual.png)
+
+### Station volume vs e-bike utilisation
+![E-bike Share Scatter](outputs/plots/ebike_share_scatter.png)
+
+### Top 20 neighbourhoods by dock capacity
+![Neighborhood Capacity](outputs/plots/neighborhood_capacity.png)
 
 ---
 
