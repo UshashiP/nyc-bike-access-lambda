@@ -265,4 +265,4 @@ Run the local pipeline to regenerate all charts:
 - [ ] AWS EMR step functions for distributed PySpark execution
 - [ ] Kafka Schema Registry for Avro message serialisation
 - [ ] dbt models on top of the gold layer for semantic layer
-- [ ] Streamlit dashboard for real-time equity map
+- [x] Streamlit dashboard for real-time equity map
